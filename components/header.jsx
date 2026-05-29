@@ -127,7 +127,7 @@ export default function Header() {
 						</Authenticated>
 
 						<Unauthenticated>
-							<SignInButton mode="modal">
+							<SignInButton>
 								<Button
 									variant="ghost"
 									className="font-medium dark:text-gray-200 dark:hover:bg-gray-800">
