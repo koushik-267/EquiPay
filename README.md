@@ -1,36 +1,143 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+# EquiPay
+
+**Track, split, and settle — the equitable way.**
+
+> 🌐 Live at [equi-pay.me](https://equi-pay.me)
+
+---
+
+## What is EquiPay?
+
+EquiPay is a full-stack expense-splitting web app that helps friends, roommates, and teams track shared costs, split bills, and settle debts without the awkwardness. Built with a modern React/Next.js stack and backed by a real-time database.
+
+---
+
+## Features
+
+- **Individual & Group Expenses** — Track 1-on-1 bills or create groups for trips, roommates, and events
+- **Flexible Split Modes** — Equal, percentage, or exact-amount splits with a live waterfall auto-balancer
+- **Settlements** — Record payments and clear balances; supports both personal and group settlements
+- **Dashboard** — Overview of what you owe and what you're owed, with a monthly bar chart
+- **Balance Details** — Per-person and per-group net balances updated in real time
+- **Expense Analytics** — Monthly spending breakdown by category
+- **Payment Reminders** — Automated daily email reminders for outstanding debts (via Inngest cron)
+- **AI Spending Insights** — Monthly personalised financial analysis emails powered by Gemini 2.5 Flash
+- **Dark Mode** — Full light/dark theme support with system preference detection
+- **Authentication** — Clerk-powered sign-in/sign-up with Google and other providers
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Framework | Next.js 16 (App Router) |
+| UI | Tailwind CSS v4 + shadcn/ui |
+| Animations | Framer Motion |
+| Database | Convex (real-time, serverless) |
+| Auth | Clerk |
+| Charts | Recharts |
+| Background Jobs | Inngest (cron functions) |
+| Email | Resend |
+| AI | Google Gemini 2.5 Flash |
+| Forms | React Hook Form + Zod |
+
+---
+
+## Project Structure
+
+```
+equipay/
+├── app/
+│   ├── (auth)/           # Sign-in / Sign-up pages (Clerk)
+│   ├── (main)/
+│   │   ├── dashboard/    # Overview, balance cards, expense chart
+│   │   ├── contacts/     # People and groups list
+│   │   ├── groups/[id]/  # Group expense & settlement view
+│   │   └── person/[id]/  # 1-on-1 expense & settlement view
+│   ├── expenses/new/     # Add expense form (individual or group)
+│   ├── settlements/      # Record a settlement
+│   └── api/inngest/      # Inngest webhook endpoint
+├── convex/               # Database schema, queries, mutations, actions
+├── components/           # Shared UI components
+├── hooks/                # useConvexQuery, useConvexMutation, useStoreUser
+└── lib/
+    ├── inngest/          # payment-reminders.js, spending-insights.js
+    ├── expense-categories.js
+    └── utils.js
+```
+
+---
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Node.js 18+
+- A [Convex](https://convex.dev) account
+- A [Clerk](https://clerk.com) account
+- A [Resend](https://resend.com) account (for emails)
+- A [Google AI Studio](https://aistudio.google.com) API key (for insights)
+- An [Inngest](https://inngest.com) account (for cron jobs)
+
+### Environment Variables
+
+Create a `.env.local` file in the project root:
+
+```env
+# Convex
+NEXT_PUBLIC_CONVEX_URL=
+
+# Clerk
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
+CLERK_SECRET_KEY=
+CLERK_JWT_ISSUER_DOMAIN=
+
+# Resend
+RESEND_API_KEY=
+
+# Google Gemini
+GEMINI_API_KEY=
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Installation
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+```bash
+# Install dependencies
+npm install
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# Start the Convex dev server (separate terminal)
+npx convex dev
 
-## Learn More
+# Start the Next.js dev server
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+Open [http://localhost:3000](http://localhost:3000).
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Seed the Database (Optional)
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+To populate dummy data for testing, run this once from the Convex dashboard or CLI:
 
-## Deploy on Vercel
+```bash
+npx convex run seed:seedDatabase
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Automated Jobs
+
+Two Inngest functions run on a schedule:
+
+- **Payment Reminders** — Runs daily at 10:00 AM. Emails every user who has outstanding 1-on-1 debts.
+- **Spending Insights** — Runs on the 1st of each month at 8:00 AM. Uses Gemini to generate and email a personalised monthly spending analysis.
+
+To test these locally, start the Inngest dev server alongside the app:
+
+```bash
+npx inngest-cli@latest dev
+```
+
+---
+
+Made with ❤️ by [Koushik Chennupati](https://github.com/koushik-267)
