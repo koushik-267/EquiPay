@@ -135,7 +135,7 @@ export default function Header() {
 								</Button>
 							</SignInButton>
 
-							<SignUpButton mode="modal">
+							<SignUpButton>
 								<Button className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-md transition-all hover:shadow-lg dark:bg-blue-600 dark:hover:bg-blue-700">
 									Get Started
 								</Button>
