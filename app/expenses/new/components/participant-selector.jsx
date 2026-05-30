@@ -32,12 +32,36 @@ export function ParticipantSelector({ participants, onParticipantsChange }) {
 		{ query: searchQuery },
 	);
 
-	// FIXED: Filter out the current user AND users that are already in the participants list
-	const availableUsers = searchResults?.filter(
-		(user) =>
-			(user._id || user.id) !== currentUser?._id && // Prevents adding yourself
-			!participants.some((p) => p.id === (user._id || user.id)),
-	);
+	const uniqueSearchResults = [];
+	const seenEmails = new Set();
+
+	if (searchResults) {
+		for (const user of searchResults) {
+			// If the user has an email we haven't seen yet, add them to our unique list
+			if (user.email && !seenEmails.has(user.email)) {
+				seenEmails.add(user.email);
+				uniqueSearchResults.push(user);
+			}
+		}
+	}
+
+	// Filter out the current user AND already added participants using BOTH ID and Email
+	const availableUsers = uniqueSearchResults.filter((user) => {
+		const userId = user._id || user.id;
+		const currentUserEmail = currentUser?.email;
+		const currentUserId = currentUser?._id;
+
+		// Block if it's the current user's ID OR the current user's email (blocks ghosts)
+		const isCurrentUser =
+			userId === currentUserId || user.email === currentUserEmail;
+
+		// Block if they are already in the selected participants list
+		const isAlreadyAdded = participants.some(
+			(p) => p.id === userId || p.email === user.email,
+		);
+
+		return !isCurrentUser && !isAlreadyAdded;
+	});
 
 	// Add a participant safely ensuring the object shape matches ExpenseForm
 	const addParticipant = (user) => {
