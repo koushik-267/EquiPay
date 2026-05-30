@@ -101,6 +101,14 @@ export function ExpenseForm({ type = "individual", onSuccess }) {
 		}
 	}, [currentUser, participants, setValue]);
 
+	// SAFEGUARD 1: Ensure strict deduplication when modifying participants
+	const handleParticipantsChange = (newParticipants) => {
+		const uniqueParticipants = Array.from(
+			new Map(newParticipants.map((p) => [p.id, p])).values(),
+		);
+		setParticipants(uniqueParticipants);
+	};
+
 	// Handle form submission
 	const onSubmit = async (data) => {
 		try {
@@ -111,6 +119,17 @@ export function ExpenseForm({ type = "individual", onSuccess }) {
 				amount: split.amount,
 				paid: split.userId === data.paidByUserId,
 			}));
+
+			// SAFEGUARD 2: Catch attempts to split exclusively with oneself
+			const uniqueSplitIds = new Set(
+				formattedSplits.map((s) => s.userId),
+			);
+			if (uniqueSplitIds.size <= 1) {
+				toast.error(
+					"You must include at least one other person in the split.",
+				);
+				return;
+			}
 
 			const totalSplitAmount = formattedSplits.reduce(
 				(sum, split) => sum + split.amount,
@@ -287,7 +306,16 @@ export function ExpenseForm({ type = "individual", onSuccess }) {
 										group.members &&
 										Array.isArray(group.members)
 									) {
-										setParticipants(group.members);
+										// Apply strict deduplication here too just in case
+										const uniqueMembers = Array.from(
+											new Map(
+												group.members.map((m) => [
+													m.id || m.userId,
+													m,
+												]),
+											).values(),
+										);
+										setParticipants(uniqueMembers);
 									}
 								}
 							}}
@@ -308,7 +336,7 @@ export function ExpenseForm({ type = "individual", onSuccess }) {
 						</Label>
 						<ParticipantSelector
 							participants={participants}
-							onParticipantsChange={setParticipants}
+							onParticipantsChange={handleParticipantsChange}
 						/>
 						{participants.length <= 1 && (
 							<p className="text-xs text-amber-600 dark:text-amber-500 font-medium mt-1">

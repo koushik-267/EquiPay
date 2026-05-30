@@ -127,7 +127,7 @@ export default function Header() {
 						</Authenticated>
 
 						<Unauthenticated>
-							<SignInButton>
+							<SignInButton forceRedirectUrl="/dashboard">
 								<Button
 									variant="ghost"
 									className="font-medium dark:text-gray-200 dark:hover:bg-gray-800">
@@ -135,7 +135,7 @@ export default function Header() {
 								</Button>
 							</SignInButton>
 
-							<SignUpButton>
+							<SignUpButton forceRedirectUrl="/dashboard">
 								<Button className="bg-blue-600 hover:bg-blue-700 text-white font-medium shadow-md transition-all hover:shadow-lg dark:bg-blue-600 dark:hover:bg-blue-700">
 									Get Started
 								</Button>

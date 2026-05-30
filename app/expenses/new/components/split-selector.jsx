@@ -29,16 +29,29 @@ export function SplitSelector({
 		let newSplits = [];
 
 		if (type === "equal") {
-			const shareAmount = amount / participants.length;
-			newSplits = participants.map((participant) => ({
-				userId: participant.id,
-				name: participant.name,
-				email: participant.email,
-				imageUrl: participant.imageUrl,
-				amount: shareAmount,
-				percentage: 100 / participants.length,
-				paid: participant.id === paidByUserId,
-			}));
+			// FIXED: The Penny Drop Algorithm
+			// Calculate base share rounded to 2 decimals
+			const baseShare =
+				Math.floor((amount / participants.length) * 100) / 100;
+			const remainder =
+				Math.round((amount - baseShare * participants.length) * 100) /
+				100;
+
+			newSplits = participants.map((participant, index) => {
+				// Give the remainder pennies to the first person
+				const actualAmount =
+					index === 0 ? baseShare + remainder : baseShare;
+
+				return {
+					userId: participant.id,
+					name: participant.name,
+					email: participant.email,
+					imageUrl: participant.imageUrl,
+					amount: actualAmount,
+					percentage: (actualAmount / amount) * 100,
+					paid: participant.id === paidByUserId,
+				};
+			});
 		} else if (type === "percentage") {
 			const evenPercentage = 100 / participants.length;
 			newSplits = participants.map((participant) => ({
@@ -51,58 +64,68 @@ export function SplitSelector({
 				paid: participant.id === paidByUserId,
 			}));
 		} else if (type === "exact") {
-			const evenAmount = amount / participants.length;
-			newSplits = participants.map((participant) => ({
-				userId: participant.id,
-				name: participant.name,
-				email: participant.email,
-				imageUrl: participant.imageUrl,
-				amount: evenAmount,
-				percentage: (evenAmount / amount) * 100,
-				paid: participant.id === paidByUserId,
-			}));
+			// FIXED: Apply Penny Drop to exact auto-fill too
+			const baseShare =
+				Math.floor((amount / participants.length) * 100) / 100;
+			const remainder =
+				Math.round((amount - baseShare * participants.length) * 100) /
+				100;
+
+			newSplits = participants.map((participant, index) => {
+				const actualAmount =
+					index === 0 ? baseShare + remainder : baseShare;
+				return {
+					userId: participant.id,
+					name: participant.name,
+					email: participant.email,
+					imageUrl: participant.imageUrl,
+					amount: actualAmount,
+					percentage: (actualAmount / amount) * 100,
+					paid: participant.id === paidByUserId,
+				};
+			});
 		}
 
 		setSplits(newSplits);
-		setTotalAmount(amount);
+
+		// Let the parent dictate the total visually when in equal mode to prevent jitter
+		setTotalAmount(
+			type === "equal"
+				? amount
+				: newSplits.reduce((acc, curr) => acc + curr.amount, 0),
+		);
 		setTotalPercentage(100);
 
 		if (onSplitsChange) {
 			onSplitsChange(newSplits);
 		}
-	}, [type, amount, participants, paidByUserId, onSplitsChange]);
+	}, [type, amount, participants, paidByUserId]); // Removed onSplitsChange to prevent circular re-renders
 
 	// WATERFALL AUTO-BALANCING: Update percentage splits
 	const updatePercentageSplit = (userId, newPercentage) => {
 		let updatedSplits = [...splits];
 		const targetIndex = updatedSplits.findIndex((s) => s.userId === userId);
 
-		// 1. Calculate sum of strictly locked sliders (ABOVE current)
 		const lockedSplits = updatedSplits.slice(0, targetIndex);
 		const lockedSum = lockedSplits.reduce(
 			(sum, s) => sum + s.percentage,
 			0,
 		);
 
-		// 2. Clamp input so it cannot exceed the remaining available pool
 		const clampedPercentage = Math.max(
 			0,
 			Math.min(100 - lockedSum, newPercentage),
 		);
 
-		// 3. Set the target user's new values
 		updatedSplits[targetIndex] = {
 			...updatedSplits[targetIndex],
 			percentage: clampedPercentage,
 			amount: (amount * clampedPercentage) / 100,
 		};
 
-		// 4. Calculate remainder
 		const remainderToDistribute = 100 - lockedSum - clampedPercentage;
 
-		// 5. Distribute remainder
 		if (targetIndex < updatedSplits.length - 1) {
-			// Waterfall DOWN to bottom candidates
 			const bottomSplits = updatedSplits.slice(targetIndex + 1);
 			const sumBottom = bottomSplits.reduce(
 				(sum, s) => sum + s.percentage,
@@ -125,7 +148,6 @@ export function SplitSelector({
 				};
 			}
 		} else if (targetIndex > 0) {
-			// Last item was edited! Waterfall UP to the immediately preceding candidate
 			const aboveIndex = targetIndex - 1;
 			const newAbovePct =
 				updatedSplits[aboveIndex].percentage + remainderToDistribute;
@@ -164,29 +186,23 @@ export function SplitSelector({
 		let updatedSplits = [...splits];
 		const targetIndex = updatedSplits.findIndex((s) => s.userId === userId);
 
-		// 1. Calculate sum of strictly locked inputs (ABOVE current)
 		const lockedSplits = updatedSplits.slice(0, targetIndex);
 		const lockedSum = lockedSplits.reduce((sum, s) => sum + s.amount, 0);
 
-		// 2. Clamp input so it cannot exceed the remaining available pool
 		const clampedAmount = Math.max(
 			0,
 			Math.min(amount - lockedSum, parsedAmount),
 		);
 
-		// 3. Set the target user's new values
 		updatedSplits[targetIndex] = {
 			...updatedSplits[targetIndex],
 			amount: clampedAmount,
 			percentage: amount > 0 ? (clampedAmount / amount) * 100 : 0,
 		};
 
-		// 4. Calculate remainder
 		const remainderToDistribute = amount - lockedSum - clampedAmount;
 
-		// 5. Distribute remainder
 		if (targetIndex < updatedSplits.length - 1) {
-			// Waterfall DOWN to bottom candidates
 			const bottomSplits = updatedSplits.slice(targetIndex + 1);
 			const sumBottom = bottomSplits.reduce(
 				(sum, s) => sum + s.amount,
@@ -209,7 +225,6 @@ export function SplitSelector({
 				};
 			}
 		} else if (targetIndex > 0) {
-			// Last item was edited! Waterfall UP to the immediately preceding candidate
 			const aboveIndex = targetIndex - 1;
 			const newAboveAmt =
 				updatedSplits[aboveIndex].amount + remainderToDistribute;
@@ -257,7 +272,6 @@ export function SplitSelector({
 				<div
 					key={split.userId}
 					className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg border border-transparent bg-muted/20 dark:bg-slate-900/30">
-					{/* FIXED WIDTH FOR NAMES: Ensures sliders perfectly align */}
 					<div className="flex items-center gap-3 w-40 sm:w-48 shrink-0 truncate">
 						<Avatar className="h-8 w-8 border shadow-sm shrink-0">
 							<AvatarImage src={split.imageUrl} />

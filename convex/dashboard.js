@@ -7,23 +7,17 @@ export const getUserBalances = query({
 		const user = await ctx.runQuery(internal.users.getCurrentUser);
 
 		/* ───────────── 1‑to‑1 expenses (no groupId) ───────────── */
-		// OPTIMIZATION: Filter out group expenses at the database level before collecting
 		const expenses = await ctx.db
 			.query("expenses")
 			.filter((q) => q.eq(q.field("groupId"), undefined))
 			.collect();
 
-		// Filter for user involvement in memory (since we have to check inside the splits array)
 		const userExpenses = expenses.filter(
 			(e) =>
 				e.paidByUserId === user._id ||
 				e.splits.some((s) => s.userId === user._id),
 		);
-
-		/* tallies */
-		let youOwe = 0;
-		let youAreOwed = 0;
-		const balanceByUser = {};
+		const balances = {};
 
 		for (const e of userExpenses) {
 			const isPayer = e.paidByUserId === user._id;
@@ -32,21 +26,15 @@ export const getUserBalances = query({
 			if (isPayer) {
 				for (const s of e.splits) {
 					if (s.userId === user._id || s.paid) continue;
-					youAreOwed += s.amount;
-					(balanceByUser[s.userId] ??= { owed: 0, owing: 0 }).owed +=
-						s.amount;
+					balances[s.userId] = (balances[s.userId] || 0) + s.amount;
 				}
 			} else if (mySplit && !mySplit.paid) {
-				youOwe += mySplit.amount;
-				(balanceByUser[e.paidByUserId] ??= {
-					owed: 0,
-					owing: 0,
-				}).owing += mySplit.amount;
+				balances[e.paidByUserId] =
+					(balances[e.paidByUserId] || 0) - mySplit.amount;
 			}
 		}
 
 		/* ───────────── 1‑to‑1 settlements (no groupId) ───────────── */
-		// OPTIMIZATION: Push filtering to the DB level
 		const settlements = await ctx.db
 			.query("settlements")
 			.filter((q) =>
@@ -62,34 +50,41 @@ export const getUserBalances = query({
 
 		for (const s of settlements) {
 			if (s.paidByUserId === user._id) {
-				youOwe -= s.amount;
-				(balanceByUser[s.receivedByUserId] ??= {
-					owed: 0,
-					owing: 0,
-				}).owing -= s.amount;
+				// I paid them -> increases my net balance against them
+				balances[s.receivedByUserId] =
+					(balances[s.receivedByUserId] || 0) + s.amount;
 			} else {
-				youAreOwed -= s.amount;
-				(balanceByUser[s.paidByUserId] ??= {
-					owed: 0,
-					owing: 0,
-				}).owed -= s.amount;
+				// They paid me -> decreases my net balance against them
+				balances[s.paidByUserId] =
+					(balances[s.paidByUserId] || 0) - s.amount;
 			}
 		}
 
-		/* build lists for UI */
+		/* build lists for UI and calculate global totals AFTER netting */
+		let youOwe = 0;
+		let youAreOwed = 0;
 		const youOweList = [];
 		const youAreOwedByList = [];
-		for (const [uid, { owed, owing }] of Object.entries(balanceByUser)) {
-			const net = owed - owing;
-			if (net === 0) continue;
+
+		for (const [uid, net] of Object.entries(balances)) {
+			// FIXED: Ignore perfectly settled balances AND ignore self-splits
+			if (net === 0 || uid === user._id) continue;
+
 			const counterpart = await ctx.db.get(uid);
 			const base = {
 				userId: uid,
 				name: counterpart?.name ?? "Unknown",
 				imageUrl: counterpart?.imageUrl,
-				amount: Math.abs(net),
+				amount: Math.abs(net), // Pass absolute value to the UI
 			};
-			net > 0 ? youAreOwedByList.push(base) : youOweList.push(base);
+
+			if (net > 0) {
+				youAreOwed += net;
+				youAreOwedByList.push(base);
+			} else {
+				youOwe += Math.abs(net);
+				youOweList.push(base);
+			}
 		}
 
 		youOweList.sort((a, b) => b.amount - a.amount);
@@ -197,9 +192,6 @@ export const getUserGroups = query({
 	handler: async (ctx) => {
 		const user = await ctx.runQuery(internal.users.getCurrentUser);
 
-		// OPTIMIZATION: Don't collect all groups in the app. Just filter them in memory after fetching.
-		// Note: If you want to scale to massive amounts of groups, consider updating your schema
-		// to have a dedicated "groupMembers" table so you can use .withIndex() here.
 		const allGroups = await ctx.db.query("groups").collect();
 		const groups = allGroups.filter((group) =>
 			group.members.some((member) => member.userId === user._id),
@@ -233,7 +225,7 @@ export const getUserGroups = query({
 
 				const settlements = await ctx.db
 					.query("settlements")
-					.withIndex("by_group", (q) => q.eq("groupId", group._id)) // OPTIMIZATION: Use the by_group index here!
+					.withIndex("by_group", (q) => q.eq("groupId", group._id))
 					.filter((q) =>
 						q.or(
 							q.eq(q.field("paidByUserId"), user._id),

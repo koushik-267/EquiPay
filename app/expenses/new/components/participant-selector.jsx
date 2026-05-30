@@ -32,9 +32,11 @@ export function ParticipantSelector({ participants, onParticipantsChange }) {
 		{ query: searchQuery },
 	);
 
-	// Filter out users that are already in the participants list
+	// FIXED: Filter out the current user AND users that are already in the participants list
 	const availableUsers = searchResults?.filter(
-		(user) => !participants.some((p) => p.id === (user._id || user.id)),
+		(user) =>
+			(user._id || user.id) !== currentUser?._id && // Prevents adding yourself
+			!participants.some((p) => p.id === (user._id || user.id)),
 	);
 
 	// Add a participant safely ensuring the object shape matches ExpenseForm
